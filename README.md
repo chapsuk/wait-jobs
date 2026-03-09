@@ -18,6 +18,8 @@ Related Kubernetes issue: [kubernetes/kubectl#1629](https://github.com/kubernete
 - live status table in TTY and CI-friendly plain text in non-TTY,
 - optional log collection after each job finishes.
 
+In CI/non-TTY mode, output is compact: it prints only status transitions and periodic progress snapshots to avoid log flooding.
+
 ## Installation
 
 ### From source

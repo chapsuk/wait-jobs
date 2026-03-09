@@ -14,13 +14,24 @@ func TestPrinter_UpdateJob_NonTTY(t *testing.T) {
 	p := New(&buf, true)
 	p.Start(2, "default", 5*time.Minute)
 	p.UpdateJob("job-a", k8s.JobStatusRunning, 8*time.Second)
+	p.UpdateJob("job-a", k8s.JobStatusRunning, 9*time.Second) // duplicate status should be suppressed
+	p.UpdateJob("job-a", k8s.JobStatusComplete, 10*time.Second)
 
 	out := buf.String()
 	if !strings.Contains(out, `Watching 2 jobs in namespace "default"`) {
 		t.Fatalf("unexpected start output:\n%s", out)
 	}
-	if !strings.Contains(out, "job=job-a status=Running age=8s") {
-		t.Fatalf("expected job line, got:\n%s", out)
+	if !strings.Contains(out, "Progress updates:") {
+		t.Fatalf("expected non-tty header, got:\n%s", out)
+	}
+	if !strings.Contains(out, "- job=job-a status=Running age=8s") {
+		t.Fatalf("expected running transition line, got:\n%s", out)
+	}
+	if !strings.Contains(out, "- job=job-a status=Complete age=10s") {
+		t.Fatalf("expected complete transition line, got:\n%s", out)
+	}
+	if strings.Count(out, "status=Running") > 1 {
+		t.Fatalf("expected deduplicated running line, got:\n%s", out)
 	}
 }
 
