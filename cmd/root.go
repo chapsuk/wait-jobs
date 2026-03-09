@@ -43,15 +43,9 @@ func newRootCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "wait-jobs [job-name...]",
 		Short:         "Wait for multiple Kubernetes jobs to finish",
-		Long:          "wait-jobs watches a group of Kubernetes Jobs in parallel and exits when all are complete/failed/deleted.",
+		Long:          "wait-jobs watches Kubernetes Jobs in parallel and exits when all selected jobs are complete/failed/deleted. If no job names and no selector are provided, it watches all jobs in the namespace.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 && opts.selector == "" {
-				return fmt.Errorf("provide either job names or --selector")
-			}
-			return nil
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := runner.LogMode(opts.logs)
 			if mode != runner.LogModeAll && mode != runner.LogModeFailed && mode != runner.LogModeNone {
