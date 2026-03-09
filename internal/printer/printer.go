@@ -24,8 +24,13 @@ type Printer struct {
 	isTTY  bool
 	noANSI bool
 
-	mu   sync.Mutex
-	jobs map[string]JobView
+	mu sync.Mutex
+
+	jobs            map[string]JobView
+	lastSnapshot    time.Time
+	snapshotEvery   time.Duration
+	nonTTYPrinted   map[string]k8s.JobStatus
+	nonTTYHasHeader bool
 }
 
 func New(out io.Writer, noANSI bool) *Printer {
@@ -33,10 +38,12 @@ func New(out io.Writer, noANSI bool) *Printer {
 		out = os.Stdout
 	}
 	return &Printer{
-		out:    out,
-		isTTY:  isTTYWriter(out),
-		noANSI: noANSI,
-		jobs:   make(map[string]JobView),
+		out:           out,
+		isTTY:         isTTYWriter(out),
+		noANSI:        noANSI,
+		jobs:          make(map[string]JobView),
+		snapshotEvery: 30 * time.Second,
+		nonTTYPrinted: make(map[string]k8s.JobStatus),
 	}
 }
 
@@ -49,8 +56,14 @@ func (p *Printer) Start(total int, namespace string, timeout time.Duration) {
 func (p *Printer) UpdateJob(name string, status k8s.JobStatus, age time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	prev, hadPrev := p.jobs[name]
 	p.jobs[name] = JobView{Name: name, Status: status, Age: age}
-	p.renderLocked()
+
+	if !p.isTTY || p.noANSI {
+		p.renderNonTTYLocked(name, status, age, hadPrev, prev.Status)
+		return
+	}
+	p.renderTTYLocked()
 }
 
 func (p *Printer) PrintLogs(jobName string, status k8s.JobStatus, logs string) {
@@ -69,10 +82,50 @@ func (p *Printer) PrintSummary(failed, deleted int) {
 	fmt.Fprintf(p.out, "Summary: failed=%d deleted=%d total=%d\n", failed, deleted, len(p.jobs))
 }
 
-func (p *Printer) renderLocked() {
+func (p *Printer) renderNonTTYLocked(name string, status k8s.JobStatus, age time.Duration, hadPrev bool, prevStatus k8s.JobStatus) {
+	now := time.Now()
+	if !p.nonTTYHasHeader {
+		fmt.Fprintln(p.out, "Progress updates:")
+		p.nonTTYHasHeader = true
+	}
+
+	// Print line only on meaningful transition to avoid CI log flood.
+	if !hadPrev || prevStatus != status {
+		fmt.Fprintf(p.out, "- job=%s status=%s age=%s\n", name, status, age.Truncate(time.Second))
+		p.nonTTYPrinted[name] = status
+	}
+
+	if p.lastSnapshot.IsZero() || now.Sub(p.lastSnapshot) >= p.snapshotEvery {
+		p.lastSnapshot = now
+		p.printSnapshotLocked()
+	}
+}
+
+func (p *Printer) printSnapshotLocked() {
+	var pending, running, complete, failed, deleted int
+	for _, job := range p.jobs {
+		switch job.Status {
+		case k8s.JobStatusPending:
+			pending++
+		case k8s.JobStatusRunning:
+			running++
+		case k8s.JobStatusComplete:
+			complete++
+		case k8s.JobStatusFailed:
+			failed++
+		case k8s.JobStatusDeleted:
+			deleted++
+		}
+	}
+	fmt.Fprintf(
+		p.out,
+		"  snapshot: pending=%d running=%d complete=%d failed=%d deleted=%d total=%d\n",
+		pending, running, complete, failed, deleted, len(p.jobs),
+	)
+}
+
+func (p *Printer) renderTTYLocked() {
 	if !p.isTTY || p.noANSI {
-		latest := latestJob(p.jobs)
-		fmt.Fprintf(p.out, "job=%s status=%s age=%s\n", latest.Name, latest.Status, latest.Age.Truncate(time.Second))
 		return
 	}
 
@@ -99,13 +152,6 @@ func (p *Printer) colorStatus(status k8s.JobStatus) string {
 	default:
 		return string(status)
 	}
-}
-
-func latestJob(m map[string]JobView) JobView {
-	for _, v := range m {
-		return v
-	}
-	return JobView{}
 }
 
 func sortJobs(m map[string]JobView) []JobView {
