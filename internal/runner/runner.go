@@ -49,9 +49,6 @@ var watchJobs watchFn = k8s.WatchJobs
 var fetchLogs logsFn = k8s.GetJobLogs
 
 func Run(ctx context.Context, client kubernetes.Interface, p Printer, opts Options) (Result, error) {
-	if len(opts.JobNames) == 0 && opts.Selector == "" {
-		return Result{}, fmt.Errorf("either selector or job names must be provided")
-	}
 	if opts.Timeout <= 0 {
 		opts.Timeout = 5 * time.Minute
 	}
@@ -67,7 +64,6 @@ func Run(ctx context.Context, client kubernetes.Interface, p Printer, opts Optio
 		return Result{}, fmt.Errorf("no jobs to watch")
 	}
 
-	start := time.Now()
 	state := map[string]k8s.JobStatus{}
 	for _, name := range targets {
 		state[name] = k8s.JobStatusPending
@@ -103,7 +99,7 @@ func Run(ctx context.Context, client kubernetes.Interface, p Printer, opts Optio
 				continue
 			}
 			state[evt.Name] = evt.Status
-			p.UpdateJob(evt.Name, evt.Status, time.Since(start))
+			p.UpdateJob(evt.Name, evt.Status, ageForEvent(evt, time.Now()))
 
 			if isTerminal(evt.Status) && !logged[evt.Name] && shouldPrintLogs(opts.LogMode, evt.Status) {
 				logged[evt.Name] = true
@@ -197,4 +193,15 @@ func summarize(state map[string]k8s.JobStatus) Result {
 		}
 	}
 	return res
+}
+
+func ageForEvent(evt k8s.JobEvent, now time.Time) time.Duration {
+	if evt.Job == nil || evt.Job.CreationTimestamp.IsZero() {
+		return 0
+	}
+	age := now.Sub(evt.Job.CreationTimestamp.Time)
+	if age < 0 {
+		return 0
+	}
+	return age
 }

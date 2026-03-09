@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -106,5 +108,23 @@ func TestRun_Timeout(t *testing.T) {
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+}
+
+func TestAgeForEvent_UsesJobCreationTimestamp(t *testing.T) {
+	now := time.Now()
+	evt := k8s.JobEvent{
+		Name:   "job-a",
+		Status: k8s.JobStatusComplete,
+		Job: &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				CreationTimestamp: metav1.NewTime(now.Add(-3 * time.Minute)),
+			},
+		},
+	}
+
+	age := ageForEvent(evt, now)
+	if age < 3*time.Minute-2*time.Second || age > 3*time.Minute+2*time.Second {
+		t.Fatalf("expected age around 3m, got %s", age)
 	}
 }

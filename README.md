@@ -47,6 +47,12 @@ Wait by explicit job names:
 wait-jobs -n default migration-a migration-b migration-c --logs all
 ```
 
+Wait all jobs in namespace (no selector needed):
+
+```bash
+wait-jobs -n default
+```
+
 ## Configuration source (auto-detect)
 
 `wait-jobs` automatically chooses cluster config:
