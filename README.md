@@ -33,6 +33,7 @@ go install github.com/chapsuk/wait-jobs@latest
 ```bash
 make build
 ./bin/wait-jobs --help
+./bin/wait-jobs version
 ```
 
 ## Quick start
@@ -73,6 +74,15 @@ This makes one binary usable both locally and inside Kubernetes jobs/pods.
 - `--kubeconfig` path to kubeconfig
 - `--context` kubeconfig context
 - `--no-color` disable ANSI colors
+
+## Version command
+
+```bash
+wait-jobs version
+# version=v0.1.0 commit=abc1234 date=2026-03-10T08:20:00Z
+```
+
+Build metadata is embedded via `-ldflags` during `make build` and release builds.
 
 ## Exit codes
 

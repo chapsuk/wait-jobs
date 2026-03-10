@@ -46,6 +46,7 @@ func newRootCmd(opts *options) *cobra.Command {
 		Long:          "wait-jobs watches Kubernetes Jobs in parallel and exits when all selected jobs are complete/failed/deleted. If no job names and no selector are provided, it watches all jobs in the namespace.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Args:          cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := runner.LogMode(opts.logs)
 			if mode != runner.LogModeAll && mode != runner.LogModeFailed && mode != runner.LogModeNone {
@@ -100,6 +101,7 @@ func newRootCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to kubeconfig")
 	cmd.Flags().StringVar(&opts.context, "context", "", "Kubernetes context")
 	cmd.Flags().BoolVar(&opts.noColor, "no-color", false, "Disable ANSI colors")
+	cmd.AddCommand(newVersionCmd())
 
 	return cmd
 }
