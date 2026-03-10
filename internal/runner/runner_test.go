@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +47,10 @@ func TestRun_AllPass(t *testing.T) {
 	}()
 
 	p := &fakePrinter{}
-	res, err := Run(context.Background(), fake.NewSimpleClientset(), p, Options{
+	res, err := Run(context.Background(), fake.NewSimpleClientset(
+		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
+		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-b", Namespace: "default"}},
+	), p, Options{
 		Namespace: "default",
 		JobNames:  []string{"job-a", "job-b"},
 		Timeout:   2 * time.Second,
@@ -77,7 +81,9 @@ func TestRun_WithFailure(t *testing.T) {
 		close(ch)
 	}()
 
-	res, err := Run(context.Background(), fake.NewSimpleClientset(), &fakePrinter{}, Options{
+	res, err := Run(context.Background(), fake.NewSimpleClientset(
+		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
+	), &fakePrinter{}, Options{
 		Namespace: "default",
 		JobNames:  []string{"job-a"},
 		Timeout:   2 * time.Second,
@@ -100,7 +106,9 @@ func TestRun_Timeout(t *testing.T) {
 		return ch, nil
 	}
 
-	_, err := Run(context.Background(), fake.NewSimpleClientset(), &fakePrinter{}, Options{
+	_, err := Run(context.Background(), fake.NewSimpleClientset(
+		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
+	), &fakePrinter{}, Options{
 		Namespace: "default",
 		JobNames:  []string{"job-a"},
 		Timeout:   50 * time.Millisecond,
@@ -108,6 +116,22 @@ func TestRun_Timeout(t *testing.T) {
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+}
+
+func TestRun_FailsFastWhenNamedJobDoesNotExist(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	_, err := Run(context.Background(), client, &fakePrinter{}, Options{
+		Namespace: "default",
+		JobNames:  []string{"missing-job"},
+		Timeout:   2 * time.Second,
+		LogMode:   LogModeNone,
+	})
+	if err == nil {
+		t.Fatal("expected error for missing job, got nil")
+	}
+	if !strings.Contains(err.Error(), "jobs not found") {
+		t.Fatalf("expected jobs not found error, got %v", err)
 	}
 }
 

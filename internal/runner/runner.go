@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -127,7 +129,27 @@ func Run(ctx context.Context, client kubernetes.Interface, p Printer, opts Optio
 
 func resolveTargets(ctx context.Context, client kubernetes.Interface, opts Options) ([]string, error) {
 	if len(opts.JobNames) > 0 {
-		return uniqueNonEmpty(opts.JobNames), nil
+		names := uniqueNonEmpty(opts.JobNames)
+		missing := make([]string, 0)
+		existing := make([]string, 0, len(names))
+
+		for _, name := range names {
+			_, err := client.BatchV1().Jobs(opts.Namespace).Get(ctx, name, metav1.GetOptions{})
+			if err == nil {
+				existing = append(existing, name)
+				continue
+			}
+			if apierrors.IsNotFound(err) {
+				missing = append(missing, name)
+				continue
+			}
+			return nil, fmt.Errorf("get job %q: %w", name, err)
+		}
+
+		if len(missing) > 0 {
+			return nil, fmt.Errorf("jobs not found in namespace %q: %s", opts.Namespace, strings.Join(missing, ", "))
+		}
+		return existing, nil
 	}
 	list, err := client.BatchV1().Jobs(opts.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: opts.Selector,
