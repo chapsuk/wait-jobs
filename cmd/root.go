@@ -100,6 +100,7 @@ func newRootCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to kubeconfig")
 	cmd.Flags().StringVar(&opts.context, "context", "", "Kubernetes context")
 	cmd.Flags().BoolVar(&opts.noColor, "no-color", false, "Disable ANSI colors")
+	cmd.AddCommand(newVersionCmd())
 
 	return cmd
 }
