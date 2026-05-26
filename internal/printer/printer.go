@@ -31,6 +31,7 @@ type Printer struct {
 	snapshotEvery   time.Duration
 	nonTTYPrinted   map[string]k8s.JobStatus
 	nonTTYHasHeader bool
+	pendingLogs     []string
 }
 
 func New(out io.Writer, noANSI bool) *Printer {
@@ -72,7 +73,15 @@ func (p *Printer) PrintLogs(jobName string, status k8s.JobStatus, logs string) {
 	if logs == "" {
 		return
 	}
-	fmt.Fprintf(p.out, "\n--- Logs: %s (%s) ---\n%s\n", jobName, status, logs)
+	block := fmt.Sprintf("\n--- Logs: %s (%s) ---\n%s\n", jobName, status, logs)
+	if p.isTTY && !p.noANSI {
+		// Buffer + immediate repaint so the log block survives subsequent
+		// \033[2J redraws (renderTTYLocked replays p.pendingLogs after the table).
+		p.pendingLogs = append(p.pendingLogs, block)
+		p.renderTTYLocked()
+		return
+	}
+	fmt.Fprint(p.out, block)
 }
 
 func (p *Printer) PrintSummary(failed, deleted int) {
@@ -133,6 +142,11 @@ func (p *Printer) renderTTYLocked() {
 	fmt.Fprintln(p.out, "  JOB                 STATUS      AGE")
 	for _, job := range sortJobs(p.jobs) {
 		fmt.Fprintf(p.out, "  %-18s  %-10s  %s\n", job.Name, p.colorStatus(job.Status), job.Age.Truncate(time.Second))
+	}
+	// Replay accumulated log blocks below the table so they survive future
+	// \033[2J redraws.
+	for _, block := range p.pendingLogs {
+		fmt.Fprint(p.out, block)
 	}
 }
 
