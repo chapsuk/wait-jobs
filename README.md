@@ -2,6 +2,8 @@
 
 `wait-jobs` is a standalone CLI utility that waits for a group of Kubernetes Jobs in parallel and exits when each job reaches a terminal state.
 
+![wait-jobs demo](demo/demo.gif)
+
 It solves the `kubectl wait` gap for workflows where you need:
 - tracking multiple jobs at once,
 - clear status output during execution,

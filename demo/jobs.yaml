@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-migration
+  namespace: wait-jobs-demo
+  labels: { app: migrations }
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: run
+          image: busybox
+          command: ["sh", "-c", "echo 'migrating data...'; sleep 3; echo 'done'"]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-update
+  namespace: wait-jobs-demo
+  labels: { app: migrations }
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: run
+          image: busybox
+          command: ["sh", "-c", "echo 'applying schema'; sleep 6; echo 'ERROR: relation \"users\" does not exist' >&2; exit 1"]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-data
+  namespace: wait-jobs-demo
+  labels: { app: migrations }
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: run
+          image: busybox
+          command: ["sh", "-c", "echo 'seeding'; sleep 10; echo 'ok'"]
